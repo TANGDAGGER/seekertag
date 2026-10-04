@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "outDir": "../work/test-build",
+    "rootDir": "../src",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "strict": true
+  },
+  "include": [
+    "../src/config/configuration-validation.ts",
+    "../src/lib/authorization.ts",
+    "../src/lib/qr.ts",
+    "../src/lib/token-amount.ts",
+    "../src/lib/wallet-address.ts",
+    "../src/features/wallet/wallet-auth-flow.ts",
+    "../src/features/wallet/wallet-session.ts"
+  ]
+}

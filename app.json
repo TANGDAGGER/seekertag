@@ -1,0 +1,45 @@
+{
+  "expo": {
+    "name": "SeekerTag",
+    "slug": "seekertag",
+    "scheme": "seekertag",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "icon": "./assets/images/seekertag-mark.png",
+    "splash": {
+      "image": "./assets/images/seekertag-mark.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0B0C0E"
+    },
+    "android": {
+      "package": "com.seekertag.app",
+      "permissions": [
+        "CAMERA"
+      ],
+      "predictiveBackGestureEnabled": false
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/seekertag-mark.png",
+          "imageWidth": 176,
+          "resizeMode": "contain",
+          "backgroundColor": "#0B0C0E"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "b1fbdf16-8a51-4ea1-a5f6-20ecb24f9fcd"
+      }
+    },
+    "owner": "seekertag"
+  }
+}

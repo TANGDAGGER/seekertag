@@ -1,0 +1,6 @@
+android/
+.expo/
+node_modules/
+work/
+outputs/
+pnpm-lock.yaml

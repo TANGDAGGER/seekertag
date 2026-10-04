@@ -1,0 +1,22 @@
+# Start from the Git ignore rules, then keep deployment-only files out of uploads.
+.git
+.gitignore
+node_modules
+.pnpm-store
+.expo
+supabase/.temp
+work
+outputs
+.env
+.env.*
+!.env.example
+*.jks
+*.keystore
+*.p8
+*.p12
+*.key
+*.mobileprovision
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.DS_Store

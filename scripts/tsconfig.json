@@ -1,0 +1,14 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "rootDir": ".",
+    "outDir": "../work/scripts",
+    "noEmit": false,
+    "types": ["node"]
+  },
+  "include": ["*.ts"]
+}

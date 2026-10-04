@@ -1,0 +1,13 @@
+project_id = "seekertag"
+
+[auth]
+enable_anonymous_sign_ins = true
+
+# The functions themselves require an authenticated Supabase user JWT and validate it
+# with auth.getUser(). Gateway verification stays disabled so both current publishable
+# keys and legacy anon keys work; this does not make either endpoint anonymous.
+[functions.wallet-auth]
+verify_jwt = false
+
+[functions.confirm-reward]
+verify_jwt = false
