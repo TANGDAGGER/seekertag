@@ -117,7 +117,7 @@ Use [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md) for the 90–120 second narration
 
 - **Static verified:** TypeScript, lint, unit/security tests, dependency compatibility, preview configuration, and Android package structure.
 - **Remote verified:** Development Supabase project, deployed migrations and Edge Functions, prior authentication/RLS rejection tests, devnet mint, and EAS APK creation. The latest wallet-auth data-plane smoke test could not be rerun from this host because TLS connections to the Supabase data endpoint were reset.
-- **Physical verified:** On 2026-10-04, an earlier preview APK passed Device A wallet verification and the complete two-device flow: item creation, QR scan, Lost Mode, finder report, DEV REWARD transfer, and Solana devnet transaction confirmation. Later physical tests also verified the owner report list and detail fixes. The final preview APK above includes the numeric reward normalization fix but has not yet completed its final physical reward retest.
+- **Physical verified:** On 2026-10-06, the final preview APK passed wallet verification, item creation, QR generation and scanning, Lost Mode, owner Finder Report list and detail, wallet signing, the DEV REWARD transaction, and Solana devnet confirmation. Duplicate-payment protection remains enabled through the guarded reward state machine, server-side confirmation, and regression tests.
 - **Not yet recorded in the repository:** The exact SIWS-versus-`signMessages` branch, final transaction signature/Explorer URL, and the broader negative-test matrix.
 
 See [docs/E2E_RESULTS.md](docs/E2E_RESULTS.md) for the evidence ledger. Static review or a successful cloud build must never be promoted to physical verification.
@@ -139,7 +139,7 @@ Set `EXPO_PUBLIC_DEMO_MODE=false` for the live devnet flow. Missing live configu
 
 ## Known limitations
 
-- The complete two-device devnet demo passed once on the release-candidate APK, but broader wallet compatibility and negative/failure-path testing remains incomplete.
+- The final preview APK passed the complete two-device Solana devnet demo, but broader wallet compatibility and negative/failure-path testing remains incomplete.
 - Wallet choice is controlled by Android's compatible-handler/default-app resolution, not by SeekerTag.
 - Phantom has no native connection path in this build.
 - Item and ownership workflow data is off-chain; only reward transactions are verified on Solana.
@@ -149,7 +149,7 @@ Set `EXPO_PUBLIC_DEMO_MODE=false` for the live devnet flow. Missing live configu
 
 ## Future roadmap
 
-- Complete the two-device physical verification matrix and expand tested MWA wallet coverage.
+- Expand the physical compatibility matrix across additional MWA wallets and negative/failure paths.
 - Add recipient acceptance for ownership transfers.
 - Add production RPC redundancy and operational monitoring.
 - Move from DEV REWARD to official SKR only after a separate, explicitly approved mainnet verification phase.
