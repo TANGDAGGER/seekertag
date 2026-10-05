@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons'
 import { useLocalSearchParams } from 'expo-router'
 import { useState } from 'react'
-import { ActivityIndicator, Linking, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'react-native'
 import { AppButton } from '@/components/app-button'
 import { Screen } from '@/components/screen'
 import { appConfig, getExplorerTransactionUrl } from '@/config/app-config'
@@ -13,6 +13,8 @@ import {
   beginReward,
   cancelRewardAttempt,
   confirmAndFinalizeReward,
+  FinderReportNotFoundError,
+  FinderReportOwnerAuthorizationError,
   recordRewardSubmission,
 } from '@/lib/item-service'
 import {
@@ -21,12 +23,18 @@ import {
   prepareRewardTransfer,
 } from '@/lib/skr-transfer'
 import { authenticateWallet } from '@/lib/wallet-auth'
+import {
+  getRewardErrorIdentity,
+  type RewardTransactionDiagnostic,
+  type RewardTransactionStage,
+} from '@/lib/reward-diagnostics'
+import { executeRewardFlow, RewardFlowError } from '@/lib/reward-flow'
 import { DEMO_FINDER, getDemoItem } from '@/mocks/demo-data'
 import { colors, radius, spacing } from '@/theme'
 
 export default function FinderReportScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
-  const { account, getTransactionSigner, sendTransactions, signMessages } = useSeekerWallet()
+  const { account, sendTransactions, signMessages } = useSeekerWallet()
   const [reviewing, setReviewing] = useState(false)
   const [sending, setSending] = useState(false)
   const [signature, setSignature] = useState<string | null>(null)
@@ -34,6 +42,8 @@ export default function FinderReportScreen() {
   const [rewardAttemptId, setRewardAttemptId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [syncWarning, setSyncWarning] = useState<string | null>(null)
+  const [rewardDiagnostic, setRewardDiagnostic] = useState<RewardTransactionDiagnostic | null>(null)
+  const [diagnosticExpanded, setDiagnosticExpanded] = useState(false)
   const isDemo = appConfig.demoMode && id === 'demo-report'
   const reportQuery = useFinderReport(isSupabaseConfigured && !isDemo ? id : undefined)
   const report = isDemo
@@ -49,21 +59,69 @@ export default function FinderReportScreen() {
   const itemQuery = useItem(isSupabaseConfigured && report?.itemId && !isDemo ? report.itemId : undefined)
   const item = isDemo ? getDemoItem('demo-backpack') : itemQuery.data
 
-  if (reportQuery.isLoading || itemQuery.isLoading) {
+  if (reportQuery.isLoading) {
     return (
       <Screen back title="Finder report">
         <View style={styles.centerState}>
           <ActivityIndicator color={colors.accent} />
+          <Text style={styles.body}>Loading finder report…</Text>
         </View>
       </Screen>
     )
   }
 
-  if (!report || !item) {
+  if (reportQuery.isError) {
+    const message =
+      reportQuery.error instanceof FinderReportNotFoundError
+        ? reportQuery.error.message
+        : reportQuery.error instanceof FinderReportOwnerAuthorizationError
+          ? reportQuery.error.message
+          : 'The finder report could not be loaded because of a network or database error.'
     return (
       <Screen back title="Finder report">
         <View style={styles.centerState}>
-          <Text style={styles.body}>This finder report could not be loaded.</Text>
+          <Ionicons name="alert-circle-outline" color={colors.danger} size={32} />
+          <Text style={styles.error}>{message}</Text>
+          <AppButton label="Retry" variant="secondary" onPress={() => void reportQuery.refetch()} />
+        </View>
+      </Screen>
+    )
+  }
+
+  if (!report) {
+    return (
+      <Screen back title="Finder report">
+        <View style={styles.centerState}>
+          <Text style={styles.body}>This finder report no longer exists.</Text>
+        </View>
+      </Screen>
+    )
+  }
+
+  if (itemQuery.isLoading) {
+    return (
+      <Screen back title="Finder report">
+        <View style={styles.centerState}>
+          <ActivityIndicator color={colors.accent} />
+          <Text style={styles.body}>Loading the reported item…</Text>
+        </View>
+      </Screen>
+    )
+  }
+
+  if (itemQuery.isError || !item) {
+    return (
+      <Screen back title="Finder report">
+        <View style={styles.centerState}>
+          <Ionicons name="alert-circle-outline" color={colors.danger} size={32} />
+          <Text style={styles.error}>
+            {itemQuery.isError
+              ? 'The finder report loaded, but its item could not be loaded because of a network or database error.'
+              : 'The finder report loaded, but its item no longer exists.'}
+          </Text>
+          {itemQuery.isError ? (
+            <AppButton label="Retry item" variant="secondary" onPress={() => void itemQuery.refetch()} />
+          ) : null}
         </View>
       </Screen>
     )
@@ -76,42 +134,76 @@ export default function FinderReportScreen() {
 
   const sendReward = async () => {
     setError(null)
+    setSyncWarning(null)
+    setRewardDiagnostic(null)
+    setDiagnosticExpanded(false)
     setSending(true)
-    let currentAttemptId: string | null = null
-    let submittedSignature: string | null = null
+    let stage: RewardTransactionStage = 'reward_auth_start'
+    const updateStage = (nextStage: RewardTransactionStage) => {
+      stage = nextStage
+      if (appConfig.walletDiagnosticsEnabled && appConfig.clusterName === 'devnet') {
+        setRewardDiagnostic({ stage: nextStage, errorClass: 'none', cluster: 'devnet' })
+      }
+    }
     try {
       if (isDemo || !isSupabaseConfigured)
         throw new Error('A live Supabase finder report is required to send a reward.')
       if (!account || String(account.address) !== item.ownerWallet)
         throw new Error('Connect the current owner wallet to send this reward.')
+      updateStage('reward_auth_start')
       await authenticateWallet(String(account.address), signMessages)
-      currentAttemptId = await beginReward(report.id)
-      setRewardAttemptId(currentAttemptId)
-      const signer = getTransactionSigner(account.address, 0n)
-      const prepared = await prepareRewardTransfer({
-        ownerWallet: item.ownerWallet,
-        finderWallet: report.finderWallet,
-        rewardAmount,
-        signer,
+      updateStage('reward_auth_complete')
+      const result = await executeRewardFlow({
+        begin: async () => await beginReward(report.id),
+        prepare: async (onStage) =>
+          await prepareRewardTransfer({
+            ownerWallet: item.ownerWallet,
+            finderWallet: report.finderWallet,
+            rewardAmount,
+            onStage,
+          }),
+        send: async (prepared) => await sendTransactions(prepared.instructions),
+        record: async (attemptId, transactionSignature) =>
+          await recordRewardSubmission(report.id, attemptId, transactionSignature),
+        confirmChain: confirmRewardTransaction,
+        confirmServer: async (transactionSignature) =>
+          await confirmAndFinalizeReward(report.id, transactionSignature),
+        cancel: async (attemptId) => await cancelRewardAttempt(report.id, attemptId),
+        onAttempt: setRewardAttemptId,
+        onSignature: setPendingSignature,
+        onStage: updateStage,
       })
-      const transactionSignature = await sendTransactions(prepared.instructions)
-      submittedSignature = transactionSignature
-      setPendingSignature(transactionSignature)
-      await recordRewardSubmission(report.id, currentAttemptId, transactionSignature)
-      await confirmRewardTransaction(transactionSignature)
-      await confirmAndFinalizeReward(report.id, transactionSignature)
-      setSignature(transactionSignature)
+      setSignature(result.signature)
       setPendingSignature(null)
     } catch (cause) {
-      if (currentAttemptId && !submittedSignature) {
-        await cancelRewardAttempt(report.id, currentAttemptId).catch(() => undefined)
+      const failure = cause instanceof RewardFlowError ? cause : null
+      const rootCause = failure?.cause ?? cause
+      const failureStage = failure?.stage ?? stage
+      if (failure?.attemptId && !failure.submittedSignature && !failure.resetFailed) {
+        setRewardAttemptId(null)
       }
-      if (submittedSignature) {
+      if (failure?.submittedSignature) {
         setSyncWarning(
           'A transaction signature exists, so SeekerTag will not send again. Use Reconcile submitted reward after checking the transaction.',
         )
       }
-      setError(getRewardTransferErrorMessage(cause))
+      if (appConfig.walletDiagnosticsEnabled && appConfig.clusterName === 'devnet') {
+        const identity = getRewardErrorIdentity(rootCause)
+        setRewardDiagnostic({
+          stage: failureStage,
+          errorClass: identity.errorClass,
+          ...(identity.errorCode !== undefined ? { errorCode: identity.errorCode } : {}),
+          ...(identity.errorMessage ? { errorMessage: identity.errorMessage } : {}),
+          ...(identity.stackLocation ? { stackLocation: identity.stackLocation } : {}),
+          cluster: 'devnet',
+        })
+      }
+      const message = getRewardTransferErrorMessage(rootCause, failureStage)
+      setError(
+        failure?.resetFailed
+          ? `${message} SeekerTag could not reset the pending reward attempt; do not send again until it is reconciled.`
+          : message,
+      )
     } finally {
       setSending(false)
     }
@@ -229,6 +321,13 @@ export default function FinderReportScreen() {
           />
         )}
         {error ? <Text style={styles.error}>{error}</Text> : null}
+        {rewardDiagnostic ? (
+          <RewardDiagnosticBlock
+            diagnostic={rewardDiagnostic}
+            expanded={diagnosticExpanded}
+            onToggle={() => setDiagnosticExpanded((value) => !value)}
+          />
+        ) : null}
         {pendingSignature ? (
           <>
             <AppButton
@@ -266,6 +365,38 @@ export default function FinderReportScreen() {
         </Text>
       </View>
     </Screen>
+  )
+}
+
+function RewardDiagnosticBlock({
+  diagnostic,
+  expanded,
+  onToggle,
+}: {
+  diagnostic: RewardTransactionDiagnostic
+  expanded: boolean
+  onToggle(): void
+}) {
+  return (
+    <View style={styles.diagnosticBlock}>
+      <Pressable accessibilityRole="button" onPress={onToggle} style={styles.diagnosticToggle}>
+        <Text style={styles.diagnosticTitle}>Reward transaction diagnostics</Text>
+        <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} color={colors.textMuted} size={16} />
+      </Pressable>
+      {expanded ? (
+        <View style={styles.diagnosticDetails}>
+          <Fact label="Stage" value={diagnostic.stage} />
+          <Fact label="Error class" value={diagnostic.errorClass} />
+          <Fact
+            label="Error code"
+            value={diagnostic.errorCode === undefined ? 'not available' : String(diagnostic.errorCode)}
+          />
+          <Fact label="Error message" value={diagnostic.errorMessage ?? 'not available'} />
+          <Fact label="Function" value={diagnostic.stackLocation ?? 'not available'} />
+          <Fact label="Cluster" value={diagnostic.cluster} />
+        </View>
+      ) : null}
+    </View>
   )
 }
 
@@ -319,7 +450,7 @@ const styles = StyleSheet.create({
   factValue: { color: colors.text, fontSize: 14, fontWeight: '800' },
   divider: { backgroundColor: colors.border, height: 1 },
   disclaimer: { color: colors.textMuted, fontSize: 12, lineHeight: 18, textAlign: 'center' },
-  centerState: { alignItems: 'center', flex: 1, justifyContent: 'center' },
+  centerState: { alignItems: 'center', flex: 1, gap: spacing.md, justifyContent: 'center' },
   messageCard: {
     backgroundColor: colors.surface,
     borderRadius: radius.md,
@@ -360,4 +491,14 @@ const styles = StyleSheet.create({
   },
   signatureText: { color: colors.text, fontSize: 11, lineHeight: 17 },
   syncWarning: { color: colors.warning, fontSize: 12, lineHeight: 18, textAlign: 'center' },
+  diagnosticBlock: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    padding: spacing.sm,
+  },
+  diagnosticToggle: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' },
+  diagnosticTitle: { color: colors.text, fontSize: 12, fontWeight: '700' },
+  diagnosticDetails: { gap: spacing.xs, paddingTop: spacing.sm },
 })

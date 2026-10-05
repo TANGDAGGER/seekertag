@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons'
 import { Image } from 'expo-image'
-import { useLocalSearchParams, useRouter } from 'expo-router'
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
+import { useCallback } from 'react'
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
 import { AppButton } from '@/components/app-button'
 import { Screen } from '@/components/screen'
@@ -9,6 +10,7 @@ import { appConfig } from '@/config/app-config'
 import { isSupabaseConfigured } from '@/config/supabase'
 import { useFinderReports, useItem } from '@/features/items/item-hooks'
 import { formatDate, shortenAddress } from '@/lib/format'
+import { FinderReportsAuthorizationError } from '@/lib/item-service'
 import { getDemoItem } from '@/mocks/demo-data'
 import { colors, radius, spacing } from '@/theme'
 
@@ -18,7 +20,14 @@ export default function ItemDetailScreen() {
   const isDemo = appConfig.demoMode && id?.startsWith('demo-')
   const itemQuery = useItem(isSupabaseConfigured && !isDemo ? id : undefined)
   const reportsQuery = useFinderReports(isSupabaseConfigured && !isDemo ? id : undefined)
+  const { refetch: refetchFinderReports } = reportsQuery
   const item = isDemo || !isSupabaseConfigured ? getDemoItem(id) : itemQuery.data
+
+  useFocusEffect(
+    useCallback(() => {
+      if (isSupabaseConfigured && !isDemo && id) void refetchFinderReports()
+    }, [id, isDemo, refetchFinderReports]),
+  )
 
   if (itemQuery.isLoading) {
     return (
@@ -85,26 +94,53 @@ export default function ItemDetailScreen() {
         />
       </View>
 
-      {item.status === 'lost' && (isDemo || (reportsQuery.data?.length ?? 0) > 0) ? (
+      {item.status === 'lost' ? (
         <View style={styles.foundSection}>
           <Text style={styles.sectionTitle}>Finder reports</Text>
-          {(isDemo
-            ? [{ id: 'demo-report', finderWallet: '72AbVzkZ1PU5RHBtExXk2Y8jVKbWdAFuURkNs5wDK91' }]
-            : (reportsQuery.data ?? [])
-          ).map((report) => (
-            <View key={report.id} style={styles.foundCard}>
-              <Ionicons name="hand-left-outline" color={colors.accent} size={24} />
-              <View style={styles.foundText}>
-                <Text style={styles.foundTitle}>Your item has been found.</Text>
-                <Text style={styles.foundWallet}>Finder {shortenAddress(report.finderWallet)}</Text>
-              </View>
+          {!isDemo && reportsQuery.isLoading ? (
+            <View style={styles.reportStateCard}>
+              <ActivityIndicator color={colors.accent} />
+              <Text style={styles.reportStateText}>Checking for finder reports…</Text>
+            </View>
+          ) : !isDemo && reportsQuery.isError ? (
+            <View style={styles.reportErrorCard}>
+              <Ionicons name="alert-circle-outline" color={colors.danger} size={24} />
+              <Text style={styles.reportErrorText}>
+                {reportsQuery.error instanceof FinderReportsAuthorizationError
+                  ? reportsQuery.error.message
+                  : 'Finder reports could not be loaded. Check the connection and retry.'}
+              </Text>
               <AppButton
-                label="View"
-                variant="ghost"
-                onPress={() => router.push({ pathname: '/finder-report/[id]', params: { id: report.id } })}
+                label="Retry"
+                variant="secondary"
+                loading={reportsQuery.isFetching}
+                onPress={() => void reportsQuery.refetch()}
               />
             </View>
-          ))}
+          ) : !isDemo && (reportsQuery.data?.length ?? 0) === 0 ? (
+            <View style={styles.reportStateCard}>
+              <Ionicons name="notifications-outline" color={colors.textMuted} size={24} />
+              <Text style={styles.reportStateText}>No finder reports yet.</Text>
+            </View>
+          ) : (
+            (isDemo
+              ? [{ id: 'demo-report', finderWallet: '72AbVzkZ1PU5RHBtExXk2Y8jVKbWdAFuURkNs5wDK91' }]
+              : (reportsQuery.data ?? [])
+            ).map((report) => (
+              <View key={report.id} style={styles.foundCard}>
+                <Ionicons name="hand-left-outline" color={colors.accent} size={24} />
+                <View style={styles.foundText}>
+                  <Text style={styles.foundTitle}>Your item has been found.</Text>
+                  <Text style={styles.foundWallet}>Finder {shortenAddress(report.finderWallet)}</Text>
+                </View>
+                <AppButton
+                  label="View"
+                  variant="ghost"
+                  onPress={() => router.push({ pathname: '/finder-report/[id]', params: { id: report.id } })}
+                />
+              </View>
+            ))
+          )}
         </View>
       ) : null}
 
@@ -182,6 +218,24 @@ const styles = StyleSheet.create({
   foundText: { flex: 1 },
   foundTitle: { color: colors.accent, fontSize: 14, fontWeight: '800' },
   foundWallet: { color: colors.textMuted, fontSize: 11, marginTop: 3 },
+  reportStateCard: {
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    flexDirection: 'row',
+    gap: spacing.sm,
+    padding: spacing.md,
+  },
+  reportStateText: { color: colors.textMuted, flex: 1, fontSize: 13, lineHeight: 19 },
+  reportErrorCard: {
+    backgroundColor: colors.dangerSoft,
+    borderColor: '#6B3035',
+    borderRadius: radius.md,
+    borderWidth: 1,
+    gap: spacing.md,
+    padding: spacing.md,
+  },
+  reportErrorText: { color: colors.danger, fontSize: 13, lineHeight: 19 },
   centerState: { alignItems: 'center', flex: 1, gap: spacing.md, justifyContent: 'center' },
   stateText: { color: colors.textMuted, fontSize: 14 },
 })

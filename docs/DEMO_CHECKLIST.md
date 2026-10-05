@@ -2,7 +2,7 @@
 
 Use only the EAS `preview` APK, one development Supabase project, Solana **devnet**, and the clearly labeled **DEV REWARD** token. Do not use mainnet or real SKR in this run. Put screenshots, wallet receipts, and devnet Explorer links in `docs/E2E_RESULTS.md`.
 
-Release-candidate build: [`fe57c1ef-f157-4e04-ad45-c3d13c3a45b2`](https://expo.dev/accounts/seekertag/projects/seekertag/builds/fe57c1ef-f157-4e04-ad45-c3d13c3a45b2) — [download APK](https://expo.dev/artifacts/eas/tPXDl48zX6o4laRH4NT4QVB1PUbtmmdKNBKp5faR0P0.apk). Both devices must use this exact build.
+Final preview build: [`0ea1480c-eb78-4a5a-8e55-6bb02f2834e8`](https://expo.dev/accounts/seekertag/projects/seekertag/builds/0ea1480c-eb78-4a5a-8e55-6bb02f2834e8) — [download APK](https://expo.dev/artifacts/eas/nYWPuNKi9FDEB_EKwtzf07vA9yGU_IwaoPyE6MpozN8.apk). Both devices must use this exact build for the final rehearsal.
 
 ## Before testing
 

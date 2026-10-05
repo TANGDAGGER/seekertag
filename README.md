@@ -94,11 +94,11 @@ SeekerTag does not claim that item metadata is an NFT or an on-chain ownership r
 
 Expo Go is not supported because MWA requires native Android modules. Install the signed EAS preview APK directly:
 
-- [Release-candidate build details](https://expo.dev/accounts/seekertag/projects/seekertag/builds/fe57c1ef-f157-4e04-ad45-c3d13c3a45b2)
-- [Download the Android APK](https://expo.dev/artifacts/eas/tPXDl48zX6o4laRH4NT4QVB1PUbtmmdKNBKp5faR0P0.apk)
+- [Final preview build details](https://expo.dev/accounts/seekertag/projects/seekertag/builds/0ea1480c-eb78-4a5a-8e55-6bb02f2834e8)
+- [Download the Android APK](https://expo.dev/artifacts/eas/nYWPuNKi9FDEB_EKwtzf07vA9yGU_IwaoPyE6MpozN8.apk)
 - Android package: `com.seekertag.app`
 
-Android may require permission to install an APK from the browser or file manager used to download it. The artifact is an internal preview build and expires on October 17, 2026.
+Android may require permission to install an APK from the browser or file manager used to download it. The artifact is an internal preview build and expires on October 19, 2026.
 
 ## Demo flow
 
@@ -117,7 +117,7 @@ Use [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md) for the 90–120 second narration
 
 - **Static verified:** TypeScript, lint, unit/security tests, dependency compatibility, preview configuration, and Android package structure.
 - **Remote verified:** Development Supabase project, deployed migrations and Edge Functions, prior authentication/RLS rejection tests, devnet mint, and EAS APK creation. The latest wallet-auth data-plane smoke test could not be rerun from this host because TLS connections to the Supabase data endpoint were reset.
-- **Physical verified:** On 2026-10-04, the release-candidate APK passed Device A wallet verification and the complete two-device flow: item creation, QR scan, Lost Mode, finder report, DEV REWARD transfer, and Solana devnet transaction confirmation.
+- **Physical verified:** On 2026-10-04, an earlier preview APK passed Device A wallet verification and the complete two-device flow: item creation, QR scan, Lost Mode, finder report, DEV REWARD transfer, and Solana devnet transaction confirmation. Later physical tests also verified the owner report list and detail fixes. The final preview APK above includes the numeric reward normalization fix but has not yet completed its final physical reward retest.
 - **Not yet recorded in the repository:** The exact SIWS-versus-`signMessages` branch, final transaction signature/Explorer URL, and the broader negative-test matrix.
 
 See [docs/E2E_RESULTS.md](docs/E2E_RESULTS.md) for the evidence ledger. Static review or a successful cloud build must never be promoted to physical verification.

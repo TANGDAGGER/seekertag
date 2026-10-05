@@ -1,15 +1,4 @@
-import {
-  appendTransactionMessageInstructions,
-  createTransactionMessage,
-  getAddressCodec,
-  getBase58Decoder,
-  getBase64Encoder,
-  pipe,
-  setTransactionMessageFeePayerSigner,
-  setTransactionMessageLifetimeUsingBlockhash,
-  signAndSendTransactionMessageWithSigners,
-  type TransactionSendingSigner,
-} from '@solana/kit'
+import { getAddressCodec, getBase64Encoder } from '@solana/kit'
 import {
   transact,
   useMobileWallet,
@@ -31,6 +20,7 @@ import {
   type StoredWalletSession,
   type WalletSessionMetadata,
 } from '@/features/wallet/wallet-session'
+import { sendInstructionsWithMobileWallet } from '@/features/wallet/wallet-instructions'
 
 type MobileWalletApi = ReturnType<typeof useMobileWallet>
 export type WalletAccount = NonNullable<MobileWalletApi['account']>
@@ -71,7 +61,6 @@ export interface WalletTransport {
   getPublicKey(): string | null
   signMessage: MobileWalletApi['signMessages']
   signAndSendTransaction: MobileWalletApi['signAndSendTransactions']
-  getTransactionSigner: MobileWalletApi['getTransactionSigner']
   sendTransactions: MobileWalletApi['sendTransactions']
 }
 
@@ -283,13 +272,9 @@ export function createMwaWalletTransport(
                   signInProof: {
                     method: 'siws' as const,
                     addressBase64: signInResult.address,
-                    signedMessage: new Uint8Array(
-                      getBase64Encoder().encode(signInResult.signed_message),
-                    ),
+                    signedMessage: new Uint8Array(getBase64Encoder().encode(signInResult.signed_message)),
                     signature: new Uint8Array(getBase64Encoder().encode(signInResult.signature)),
-                    ...(signInResult.signature_type
-                      ? { signatureType: signInResult.signature_type }
-                      : {}),
+                    ...(signInResult.signature_type ? { signatureType: signInResult.signature_type } : {}),
                   },
                 }
               : {}),
@@ -346,35 +331,9 @@ export function createMwaWalletTransport(
     return result
   }) as MobileWalletApi['signAndSendTransactions']
 
-  const getTransactionSigner: MobileWalletApi['getTransactionSigner'] = (
-    address,
-    minContextSlot,
-  ): TransactionSendingSigner => ({
-    address,
-    signAndSendTransactions: async (transactions, config) => {
-      config?.abortSignal?.throwIfAborted()
-      const signatures = await signAndSendTransactions([...transactions], minContextSlot)
-      config?.abortSignal?.throwIfAborted()
-      return signatures
-    },
-  })
-
   const sendTransactions: MobileWalletApi['sendTransactions'] = async (instructions) => {
-    const account = getCurrentAccount()
-    if (!account) throw new Error('No MWA wallet account is authorized.')
-    const {
-      context: { slot: minContextSlot },
-      value: latestBlockhash,
-    } = await walletApi.client.rpc.getLatestBlockhash().send()
-    const signer = getTransactionSigner(account.address, minContextSlot)
-    const transactionMessage = pipe(
-      createTransactionMessage({ version: 0 }),
-      (message) => appendTransactionMessageInstructions(instructions, message),
-      (message) => setTransactionMessageFeePayerSigner(signer, message),
-      (message) => setTransactionMessageLifetimeUsingBlockhash(latestBlockhash, message),
-    )
-    const signatureBytes = await signAndSendTransactionMessageWithSigners(transactionMessage)
-    return getBase58Decoder().decode(signatureBytes)
+    if (!getCurrentAccount()) throw new Error('No MWA wallet account is authorized.')
+    return await sendInstructionsWithMobileWallet(walletApi.sendTransactions, instructions)
   }
 
   return {
@@ -398,7 +357,6 @@ export function createMwaWalletTransport(
     getPublicKey: getCurrentPublicKey,
     signMessage: signMessages,
     signAndSendTransaction: signAndSendTransactions,
-    getTransactionSigner,
     sendTransactions,
   }
 }

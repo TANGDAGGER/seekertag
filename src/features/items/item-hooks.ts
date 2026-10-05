@@ -3,7 +3,7 @@ import type { ImagePickerAsset } from 'expo-image-picker'
 import {
   createFinderReport,
   createItem,
-  getFinderReport,
+  getOwnerFinderReport,
   getItem,
   listFinderReports,
   listItems,
@@ -61,13 +61,15 @@ export function useFinderReports(itemId?: string) {
     queryKey: ['finder-reports', itemId],
     queryFn: () => listFinderReports(itemId!),
     enabled: Boolean(itemId),
+    refetchOnMount: 'always',
+    staleTime: 0,
   })
 }
 
 export function useFinderReport(reportId?: string) {
   return useQuery({
     queryKey: ['finder-report', reportId],
-    queryFn: () => getFinderReport(reportId!),
+    queryFn: () => getOwnerFinderReport(reportId!),
     enabled: Boolean(reportId),
   })
 }

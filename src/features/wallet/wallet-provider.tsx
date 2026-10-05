@@ -95,7 +95,6 @@ type SeekerWalletContextValue = {
   retryVerification(): Promise<void>
   signMessages: WalletTransport['signMessage']
   signAndSendTransactions: WalletTransport['signAndSendTransaction']
-  getTransactionSigner: WalletTransport['getTransactionSigner']
   sendTransactions: WalletTransport['sendTransactions']
 }
 
@@ -404,7 +403,6 @@ export function SeekerWalletProvider({ children }: PropsWithChildren) {
       retryVerification,
       signMessages: transport.signMessage,
       signAndSendTransactions: transport.signAndSendTransaction,
-      getTransactionSigner: transport.getTransactionSigner,
       sendTransactions: transport.sendTransactions,
     }),
     [

@@ -4,16 +4,16 @@ import {
   getTransferCheckedInstruction,
   TOKEN_PROGRAM_ADDRESS,
 } from '@solana-program/token'
-import {
-  address,
-  createSolanaRpc,
-  signature,
-  type Address,
-  type Instruction,
-  type TransactionSigner,
-} from '@solana/kit'
+import { address, createSolanaRpc, signature, type Address, type Instruction } from '@solana/kit'
 import { appConfig, verifyConfiguredRpc } from '@/config/app-config'
+import {
+  createInstructionOnlySigner,
+  prepareInstructionsForMobileWallet,
+} from '@/features/wallet/wallet-instructions'
+import type { RewardTransactionStage } from '@/lib/reward-diagnostics'
 import { parseTokenAmount } from '@/lib/token-amount'
+
+export { getRewardTransferErrorMessage } from '@/lib/reward-error'
 
 const MINIMUM_FEE_BALANCE_LAMPORTS = 3_000_000n
 
@@ -27,7 +27,7 @@ export async function prepareRewardTransfer(input: {
   ownerWallet: string
   finderWallet: string
   rewardAmount: string
-  signer: TransactionSigner
+  onStage?: (stage: RewardTransactionStage) => void
 }): Promise<PreparedRewardTransfer> {
   let owner: Address
   let finder: Address
@@ -43,6 +43,18 @@ export async function prepareRewardTransfer(input: {
   if (!rewardToken) throw new Error('A reward token is not configured.')
   const { mint, decimals, symbol } = rewardToken
   const amountBaseUnits = parseTokenAmount(input.rewardAmount, decimals)
+  input.onStage?.('reward_prepare_rpc')
+  await verifyConfiguredRpc()
+
+  input.onStage?.('reward_prepare_balance')
+  const { value: feeBalance } = await createSolanaRpc(appConfig.rpcUrl).getBalance(owner).send()
+  if (feeBalance < MINIMUM_FEE_BALANCE_LAMPORTS) {
+    throw new Error(
+      'The owner wallet needs more SOL to pay network fees and, if needed, create the finder token account.',
+    )
+  }
+
+  input.onStage?.('reward_prepare_ata')
   const [source] = await findAssociatedTokenPda({ owner, mint, tokenProgram: TOKEN_PROGRAM_ADDRESS })
   const [destination] = await findAssociatedTokenPda({
     owner: finder,
@@ -51,10 +63,8 @@ export async function prepareRewardTransfer(input: {
   })
   const rpc = createSolanaRpc(appConfig.rpcUrl)
 
-  await verifyConfiguredRpc()
-
-  const [{ value: feeBalance }, sourceBalanceResult, mintAccount] = await Promise.all([
-    rpc.getBalance(owner).send(),
+  input.onStage?.('reward_prepare_balance')
+  const [sourceBalanceResult, mintAccount] = await Promise.all([
     rpc
       .getTokenAccountBalance(source)
       .send()
@@ -62,11 +72,6 @@ export async function prepareRewardTransfer(input: {
     rpc.getAccountInfo(mint, { encoding: 'base64' }).send(),
   ])
 
-  if (feeBalance < MINIMUM_FEE_BALANCE_LAMPORTS) {
-    throw new Error(
-      'The owner wallet needs more SOL to pay network fees and, if needed, create the finder token account.',
-    )
-  }
   if (!sourceBalanceResult)
     throw new Error(`The owner wallet does not have a ${symbol} token account on this network.`)
   if (!mintAccount.value) throw new Error(`The configured ${symbol} mint does not exist on this network.`)
@@ -84,12 +89,12 @@ export async function prepareRewardTransfer(input: {
     throw new Error(`The owner wallet does not have enough ${symbol} for this reward.`)
   }
 
-  return {
-    amountBaseUnits,
-    mint,
-    instructions: [
+  input.onStage?.('reward_prepare_instruction')
+  const instructionSigner = createInstructionOnlySigner(owner)
+  const instructions = prepareInstructionsForMobileWallet(
+    [
       getCreateAssociatedTokenIdempotentInstruction({
-        payer: input.signer,
+        payer: instructionSigner,
         ata: destination,
         owner: finder,
         mint,
@@ -99,27 +104,19 @@ export async function prepareRewardTransfer(input: {
         source,
         mint,
         destination,
-        authority: input.signer,
+        authority: instructionSigner,
         amount: amountBaseUnits,
         decimals,
       }),
     ],
-  }
-}
+    owner,
+  )
 
-export function getRewardTransferErrorMessage(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error)
-  const normalized = message.toLowerCase()
-  if (normalized.includes('cancel') || normalized.includes('reject') || normalized.includes('declin')) {
-    return 'The transaction was cancelled in your wallet. No reward was recorded.'
+  return {
+    amountBaseUnits,
+    mint,
+    instructions,
   }
-  if (normalized.includes('insufficient') && normalized.includes('fund')) {
-    return 'There is not enough SOL or reward-token balance to complete this reward.'
-  }
-  if (normalized.includes('blockhash') || normalized.includes('expired')) {
-    return 'The transaction expired before it was submitted. Please try again.'
-  }
-  return message || 'The reward transaction failed. No success was recorded.'
 }
 
 export async function confirmRewardTransaction(transactionSignature: string): Promise<void> {

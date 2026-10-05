@@ -10,6 +10,11 @@ test('converts decimal rewards without floating-point arithmetic', () => {
   assert.equal(parseTokenAmount('1.25', 6), 1_250_000n)
 })
 
+test('accepts PostgREST numeric JSON values without calling string-only methods', () => {
+  assert.equal(parseTokenAmount(100, 6), 100_000_000n)
+  assert.equal(parseTokenAmount(1.25, 6), 1_250_000n)
+})
+
 test('rejects zero, negative, exponential, and excessive precision', () => {
   for (const amount of ['0', '-1', '1e3', '1.0000001']) {
     assert.throws(() => parseTokenAmount(amount, 6))

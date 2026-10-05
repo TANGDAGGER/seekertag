@@ -13,6 +13,31 @@ export class MissingSupabaseConfigError extends Error {
   }
 }
 
+export class FinderReportsAuthorizationError extends Error {
+  constructor() {
+    super(
+      'Finder reports require a current verified owner session. Reconnect and verify the owner wallet, then retry.',
+    )
+    this.name = 'FinderReportsAuthorizationError'
+  }
+}
+
+export class FinderReportOwnerAuthorizationError extends Error {
+  constructor() {
+    super(
+      'The verified owner session expired or does not match this item. Reconnect and verify the owner wallet, then retry.',
+    )
+    this.name = 'FinderReportOwnerAuthorizationError'
+  }
+}
+
+export class FinderReportNotFoundError extends Error {
+  constructor() {
+    super('This finder report no longer exists.')
+    this.name = 'FinderReportNotFoundError'
+  }
+}
+
 function getClient() {
   if (!supabase) throw new MissingSupabaseConfigError()
   return supabase
@@ -112,7 +137,7 @@ export async function createFinderReport(input: {
   })
   if (error?.code === '23505') throw new Error('You already reported this item as found.')
   if (error) throw error
-  const report = await getFinderReport(reportId)
+  const report = await getFinderReportForFinder(reportId)
   if (!report) throw new Error('The finder report was created but could not be reloaded.')
   return report
 }
@@ -120,21 +145,46 @@ export async function createFinderReport(input: {
 export async function listFinderReports(itemId: string): Promise<FinderReport[]> {
   const client = getClient()
   await ensureAppSession()
-  const { data, error } = await client
-    .from('finder_reports')
-    .select('*')
-    .eq('item_id', itemId)
-    .order('created_at', { ascending: false })
+  const { data, error } = await client.rpc('list_owner_finder_reports', { target_item_id: itemId })
+  if (
+    error?.code === '42501' ||
+    /verified wallet session|required to list finder reports|verified current owner/i.test(
+      error?.message ?? '',
+    )
+  ) {
+    throw new FinderReportsAuthorizationError()
+  }
   if (error) throw error
   return ((data ?? []) as FinderReportRow[]).map(mapFinderReport)
 }
 
-export async function getFinderReport(reportId: string): Promise<FinderReport | null> {
+export async function getOwnerFinderReport(reportId: string): Promise<FinderReport> {
   const client = getClient()
   await ensureAppSession()
-  const { data, error } = await client.from('finder_reports').select('*').eq('id', reportId).maybeSingle()
+  const { data, error } = await client.rpc('get_owner_finder_report', { target_report_id: reportId })
+  if (error?.code === 'P0002' || /finder report not found/i.test(error?.message ?? '')) {
+    throw new FinderReportNotFoundError()
+  }
+  if (
+    error?.code === '42501' ||
+    /verified wallet session|verified current owner/i.test(error?.message ?? '')
+  ) {
+    throw new FinderReportOwnerAuthorizationError()
+  }
   if (error) throw error
-  return data ? mapFinderReport(data as FinderReportRow) : null
+  const row = (Array.isArray(data) ? data[0] : data) as FinderReportRow | undefined
+  if (!row) throw new FinderReportNotFoundError()
+  return mapFinderReport(row)
+}
+
+async function getFinderReportForFinder(reportId: string): Promise<FinderReport> {
+  const client = getClient()
+  await ensureAppSession()
+  const { data, error } = await client.rpc('get_my_finder_report', { target_report_id: reportId })
+  if (error) throw error
+  const row = (Array.isArray(data) ? data[0] : data) as FinderReportRow | undefined
+  if (!row) throw new Error('The finder report is not available to this verified finder.')
+  return mapFinderReport(row)
 }
 
 export async function beginReward(reportId: string): Promise<string> {

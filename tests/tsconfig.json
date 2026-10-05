@@ -12,10 +12,14 @@
   "include": [
     "../src/config/configuration-validation.ts",
     "../src/lib/authorization.ts",
+    "../src/lib/reward-diagnostics.ts",
+    "../src/lib/reward-error.ts",
+    "../src/lib/reward-flow.ts",
     "../src/lib/qr.ts",
     "../src/lib/token-amount.ts",
     "../src/lib/wallet-address.ts",
     "../src/features/wallet/wallet-auth-flow.ts",
-    "../src/features/wallet/wallet-session.ts"
+    "../src/features/wallet/wallet-session.ts",
+    "../src/features/wallet/wallet-instructions.ts"
   ]
 }

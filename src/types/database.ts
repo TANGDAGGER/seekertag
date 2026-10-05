@@ -6,7 +6,10 @@ export type ItemRow = {
   description: string | null
   image_url: string | null
   status: 'protected' | 'lost' | 'returned'
-  finder_reward_amount: string | null
+  // PostgREST serializes PostgreSQL numeric values as JSON numbers for the
+  // reward sizes currently used by SeekerTag. Accept both representations at
+  // the transport boundary and normalize them in mapItem().
+  finder_reward_amount: string | number | null
   reward_transaction_signature: string | null
   created_at: string
   updated_at: string

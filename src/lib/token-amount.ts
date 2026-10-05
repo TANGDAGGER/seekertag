@@ -1,8 +1,8 @@
-export function parseTokenAmount(value: string, decimals: number): bigint {
+export function parseTokenAmount(value: string | number, decimals: number): bigint {
   if (!Number.isInteger(decimals) || decimals < 0 || decimals > 18) {
     throw new Error('Token decimals must be a whole number from 0 to 18.')
   }
-  const normalized = value.trim()
+  const normalized = String(value).trim()
   if (!/^\d+(?:\.\d+)?$/.test(normalized)) throw new Error('Enter a valid token amount.')
   const [whole = '0', fraction = ''] = normalized.split('.')
   if (fraction.length > decimals) throw new Error(`This token supports at most ${decimals} decimal places.`)

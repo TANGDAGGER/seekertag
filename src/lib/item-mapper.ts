@@ -9,7 +9,7 @@ export function mapItem(row: ItemRow, events: OwnershipEventRow[] = []): Item {
     imageUrl: row.image_url ?? undefined,
     ownerWallet: row.owner_wallet,
     status: row.status,
-    finderRewardAmount: row.finder_reward_amount ?? undefined,
+    finderRewardAmount: row.finder_reward_amount === null ? undefined : String(row.finder_reward_amount),
     rewardTransactionSignature: row.reward_transaction_signature ?? undefined,
     createdAt: row.created_at,
     ownershipHistory: events.map((event) => ({
